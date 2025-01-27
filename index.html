@@ -1,0 +1,650 @@
+<style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f0f0; }
+    #canvas-container { background-color: #e0e0e0; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; justify-content: center; align-items: center; height: 60vh; position: relative; }
+    #controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .control-group {
+        background-color: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        width: calc(25% - 20px);
+        min-width: 200px;
+    }
+    input[type="range"] { -webkit-appearance: none; appearance: none; height: 10px; border-radius: 5px; background: #d3d3d3; outline: none; margin-bottom: 10px; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
+    label { display: block; text-align: center; font-weight: bold; }
+    #reset-button { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; }
+    #reset-button:hover { background-color: #45a049; }
+    #info { text-align: center; margin-top: 20px; font-size: 18px; }
+    #symptoms { text-align: center; margin-top: 20px; font-size: 16px; }
+    #feeling { text-align: center; margin-top: 20px; font-size: 20px; font-weight: bold; }
+    #status { text-align: center; margin-top: 20px; font-size: 20px; font-weight: bold; }
+    #speech-bubble { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background-color: white; border-radius: 20px; padding: 10px; max-width: 200px; text-align: center; display: none; }
+    #speech-bubble::after { content: ''; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); border-width: 10px 10px 0; border-style: solid; border-color: white transparent transparent transparent; }
+    #death-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; color: white; font-size: 24px; display: none; }
+    #treatments { text-align: center; margin-top: 20px; }
+    #treatments button { margin: 5px; padding: 5px 10px; font-size: 14px; }
+    #medical-history { margin-top: 20px; text-align: center; }
+    #history-list { list-style-type: none; padding: 0; max-height: 100px; overflow-y: auto; border: 1px solid #ccc; border-radius: 5px; margin: 10px auto; width: 80%; }
+    #day-night-cycle { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #87CEEB, #E0F6FF); opacity: 0.3; z-index: -1; transition: background 10s ease-in-out; }
+    #health-status { text-align: center; margin-top: 20px; }
+    #health-bar { width: 100%; height: 20px; background-color: #ddd; }
+    #health-bar-fill { width: 100%; height: 100%; background-color: #4CAF50; }
+</style>
+</head>
+<body>
+    <div id="canvas-container">
+        <div id="death-overlay">Stickman has died</div>
+        <svg id="stickman" width="400" height="600" viewBox="0 0 200 300">
+            <!-- Stickman body parts -->
+            <circle id="head" cx="100" cy="50" r="20" fill="#000"/>
+            <line id="body" x1="100" y1="70" x2="100" y2="170" stroke="#000" stroke-width="4"/>
+            <line id="left-arm" x1="100" y1="90" x2="60" y2="120" stroke="#000" stroke-width="4"/>
+            <line id="right-arm" x1="100" y1="90" x2="140" y2="120" stroke="#000" stroke-width="4"/>
+            <line id="left-leg" x1="100" y1="170" x2="80" y2="250" stroke="#000" stroke-width="4"/>
+            <line id="right-leg" x1="100" y1="170" x2="120" y2="250" stroke="#000" stroke-width="4"/>
+            
+            <!-- Organs -->
+            <circle id="heart" cx="95" cy="110" r="8" fill="red" opacity="0.7"/>
+            <ellipse id="left-lung" cx="85" cy="100" rx="10" ry="15" fill="pink" opacity="0.5"/>
+            <ellipse id="right-lung" cx="105" cy="100" rx="10" ry="15" fill="pink" opacity="0.5"/>
+            <ellipse id="stomach" cx="100" cy="140" rx="15" ry="10" fill="purple" opacity="0.5"/>
+            <ellipse id="liver" cx="115" cy="130" rx="12" ry="8" fill="brown" opacity="0.5"/>
+            <ellipse id="brain" cx="100" cy="45" rx="15" ry="10" fill="gray" opacity="0.5"/>
+            
+            <!-- Circulatory system -->
+            <path id="blood-vessels" d="M95,110 Q100,140 100,170 M95,110 Q90,90 100,70 M95,110 Q70,100 60,120 M95,110 Q130,100 140,120" stroke="red" stroke-width="2" fill="none" opacity="0.5"/>
+            
+            <!-- Sweat drops -->
+            <g id="sweat" opacity="0">
+                <circle cx="85" cy="40" r="2" fill="#87CEFA"/>
+                <circle cx="115" cy="40" r="2" fill="#87CEFA"/>
+                <circle cx="55" cy="100" r="2" fill="#87CEFA"/>
+                <circle cx="145" cy="100" r="2" fill="#87CEFA"/>
+            </g>
+
+            <!-- Mouth -->
+            <path id="mouth" d="M90,60 Q100,70 110,60" stroke="#000" stroke-width="2" fill="none"/>
+        </svg>
+        <div id="speech-bubble"></div>
+    </div>
+    <div id="controls">
+        <div class="control-group">
+            <input type="range" id="temperature" min="20" max="50" step="0.1" value="37">
+            <label for="temperature">Body Temperature (°C): <span id="temp-value">37</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="heartrate" min="0" max="500" step="1" value="70">
+            <label for="heartrate">Heart Rate (BPM): <span id="bpm-value">70</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="respiration" min="8" max="30" step="1" value="14">
+            <label for="respiration">Respiratory Rate (breaths/min): <span id="resp-value">14</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="blood-pressure" min="80" max="180" step="1" value="120">
+            <label for="blood-pressure">Blood Pressure (systolic, mmHg): <span id="bp-value">120</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="glucose" min="70" max="200" step="1" value="100">
+            <label for="glucose">Blood Glucose (mg/dL): <span id="glucose-value">100</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="hydration" min="0" max="100" step="1" value="70">
+            <label for="hydration">Hydration (%): <span id="hydration-value">70</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="oxygen" min="70" max="100" step="1" value="98">
+            <label for="oxygen">Oxygen Saturation (%): <span id="oxygen-value">98</span></label>
+        </div>
+        <div class="control-group">
+            <input type="range" id="pain" min="0" max="10" step="1" value="0">
+            <label for="pain">Pain Level (0-10): <span id="pain-value">0</span></label>
+        </div>
+        <div class="control-group">
+            <button id="reset-button">Reset All Values</button>
+        </div>
+    </div>
+    <div id="treatments">
+        <h3>Treatments</h3>
+        <button id="give-water">Give Water</button>
+        <button id="give-food">Give Food</button>
+        <button id="give-medicine">Give Medicine</button>
+        <button id="apply-ice-pack">Apply Ice Pack</button>
+        <button id="apply-heat-pack">Apply Heat Pack</button>
+        <button id="add-disease">Add Disease</button>
+    </div>
+    <div id="info">Adjust the sliders to change the stickman's vital signs!</div>
+    <div id="symptoms">Symptoms: <span id="symptom-list"></span></div>
+    <div id="feeling">Stickman feels: <span id="feeling-state">Normal</span></div>
+    <div id="status">Status: <span id="status-value">Happy</span></div>
+    <div id="health-status">
+        <h3>Stickman Health: <span id="health-value">100</span>%</h3>
+        <div id="health-bar">
+            <div id="health-bar-fill" style="width: 100%; height: 100%; background-color: #4CAF50;"></div>
+        </div>
+    </div>
+    <div id="medical-history">
+        <h3>Medical History</h3>
+        <ul id="history-list"></ul>
+    </div>
+    <div id="day-night-cycle"></div>
+<script>
+document.addEventListener('DOMContentLoaded', (event) => {
+    let stickmanHealth = 100;
+    let deathMessageSpoken = false;
+
+    let idleMessages = ['I\'m bored...', 'What should we do next?', 'How about changing something?', 'I wonder what would happen if...', 'La la la la...'];
+    let criticalMessages = ['THIS IS LIKE TORTURE!', 'Help me, please!', 'I can\'t take this anymore!'];
+    let needWaterMessages = ['I\'m so thirsty...', 'Could I have some water?', 'I wanna drink...'];
+    let needOxygenMessages = ['I need more air!', 'I wanna breathe more air...', 'It\'s hard to breathe...'];
+    let happyMessages = ['I feel great!', 'What a beautiful day!', 'Life is good!'];
+
+    const temperature = document.getElementById('temperature');
+    const heartrate = document.getElementById('heartrate');
+    const respiration = document.getElementById('respiration');
+    const bloodPressure = document.getElementById('blood-pressure');
+    const glucose = document.getElementById('glucose');
+    const hydration = document.getElementById('hydration');
+    const oxygen = document.getElementById('oxygen');
+    const pain = document.getElementById('pain');
+    const tempValue = document.getElementById('temp-value');
+    const bpmValue = document.getElementById('bpm-value');
+    const respValue = document.getElementById('resp-value');
+    const bpValue = document.getElementById('bp-value');
+    const glucoseValue = document.getElementById('glucose-value');
+    const hydrationValue = document.getElementById('hydration-value');
+    const oxygenValue = document.getElementById('oxygen-value');
+    const painValue = document.getElementById('pain-value');
+    const heart = document.getElementById('heart');
+    const leftLung = document.getElementById('left-lung');
+    const rightLung = document.getElementById('right-lung');
+    const bloodVessels = document.getElementById('blood-vessels');
+    const stickman = document.getElementById('stickman');
+    const sweat = document.getElementById('sweat');
+    const symptomList = document.getElementById('symptom-list');
+    const feelingState = document.getElementById('feeling-state');
+    const speechBubble = document.getElementById('speech-bubble');
+    const mouth = document.getElementById('mouth');
+    const statusValue = document.getElementById('status-value');
+
+    let consciousness = 'awake';
+    let lastInteractionTime = Date.now();
+    let stickmanStatus = 'Happy';
+    const idleMessagesPool = ['I\'m bored...', 'What should we do next?', 'How about changing something?', 'I wonder what would happen if...', 'La la la la...'];
+    
+    function updateHealth() {
+        const temp = parseFloat(temperature.value);
+        const bpm = parseInt(heartrate.value);
+        const resp = parseInt(respiration.value);
+        const bp = parseInt(bloodPressure.value);
+        const gluc = parseInt(glucose.value);
+        const hydr = parseInt(hydration.value);
+        const oxy = parseInt(oxygen.value);
+        const painLevel = parseInt(pain.value);
+
+        let healthDeduction = 0;
+
+        if (temp > 39 || temp < 35) healthDeduction += 10;
+        if (temp > 41 || temp < 33) healthDeduction += 20;
+        if (bpm > 120 || bpm < 50) healthDeduction += 10;
+        if (bpm > 180 || bpm < 30) healthDeduction += 20;
+        if (resp > 25 || resp < 10) healthDeduction += 10;
+        if (resp > 30 || resp < 6) healthDeduction += 20;
+        if (bp > 160 || bp < 90) healthDeduction += 10;
+        if (bp > 180 || bp < 60) healthDeduction += 20;
+        if (gluc > 180 || gluc < 70) healthDeduction += 10;
+        if (gluc > 250 || gluc < 50) healthDeduction += 20;
+        if (hydr < 50) healthDeduction += 10;
+        if (hydr < 30) healthDeduction += 20;
+        if (oxy < 95) healthDeduction += 10;
+        if (oxy < 90) healthDeduction += 20;
+        if (painLevel > 5) healthDeduction += 10;
+        if (painLevel > 8) healthDeduction += 20;
+
+        stickmanHealth = Math.max(0, Math.min(100, stickmanHealth - healthDeduction / 10));
+
+        if (stickmanHealth <= 0) {
+            consciousness = 'dead';
+        } else if (stickmanHealth < 20) {
+            consciousness = 'unconscious';
+        } else if (stickmanHealth < 50) {
+            consciousness = 'critical';
+        } else {
+            consciousness = 'awake';
+        }
+    }
+
+    function periodicHealthUpdate() {
+        updateHealth();
+        updateStickmanDisplay();
+    }
+
+    function speak(message) {
+        if (consciousness !== 'dead') {
+            let selectedMessage = message;
+            if (message === 'auto') {
+                if (stickmanHealth < 20) {
+                    selectedMessage = criticalMessages[Math.floor(Math.random() * criticalMessages.length)];
+                } else if (parseInt(hydration.value) < 30) {
+                    selectedMessage = needWaterMessages[Math.floor(Math.random() * needWaterMessages.length)];
+                } else if (parseInt(oxygen.value) < 90) {
+                    selectedMessage = needOxygenMessages[Math.floor(Math.random() * needOxygenMessages.length)];
+                } else if (stickmanHealth > 80) {
+                    selectedMessage = happyMessages[Math.floor(Math.random() * happyMessages.length)];
+                } else {
+                    selectedMessage = idleMessages[Math.floor(Math.random() * idleMessages.length)];
+                }
+            }
+            speechBubble.textContent = selectedMessage;
+            speechBubble.style.display = 'block';
+            mouth.style.animation = 'talk 0.5s ease-in-out 3';
+            setTimeout(() => {
+                speechBubble.style.display = 'none';
+                mouth.style.animation = 'none';
+            }, 3000);
+        }
+    }
+
+    function updateStickmanDisplay() {
+        updateDisplayValues();
+        updateStatus();
+        updateOrganAppearance();
+        updateSymptoms(parseFloat(temperature.value), parseInt(heartrate.value), parseInt(respiration.value), 
+                       parseInt(bloodPressure.value), parseInt(glucose.value), parseInt(hydration.value), 
+                       parseInt(oxygen.value), parseInt(pain.value));
+
+        document.getElementById('health-value').textContent = Math.round(stickmanHealth);
+        document.getElementById('health-bar-fill').style.width = `${stickmanHealth}%`;
+        document.getElementById('health-bar-fill').style.backgroundColor = stickmanHealth > 50 ? '#4CAF50' : stickmanHealth > 20 ? '#FFA500' : '#FF0000';
+
+        const hue = 240 - (parseFloat(temperature.value) - 20) * 8;
+        stickman.style.filter = `hue-rotate(${hue}deg)`;
+
+        if (parseInt(heartrate.value) > 0) {
+            heart.style.animation = `heartbeat ${60 / parseInt(heartrate.value)}s ease-in-out infinite`;
+        } else {
+            heart.style.animation = 'none';
+        }
+
+        const breathDuration = 60 / parseInt(respiration.value);
+        leftLung.style.animation = `breathe ${breathDuration}s ease-in-out infinite`;
+        rightLung.style.animation = `breathe ${breathDuration}s ease-in-out infinite`;
+        
+        bloodVessels.style.animation = `flow ${60 / parseInt(heartrate.value)}s linear infinite`;
+
+        if (consciousness === 'dead') {
+            stickman.style.opacity = '0.2';
+            document.getElementById('death-overlay').style.display = 'flex';
+            if (!deathMessageSpoken) {
+                speak('Goodbye, cruel world...');
+                deathMessageSpoken = true;
+            }
+            speechBubble.style.display = 'none';
+            mouth.style.animation = 'none';
+        } else if (consciousness === 'unconscious' || consciousness === 'critical') {
+            stickman.style.opacity = '0.5';
+            speak('I don\'t feel so good...');
+        } else {
+            stickman.style.opacity = '1';
+            document.getElementById('death-overlay').style.display = 'none';
+        }
+
+        lastInteractionTime = Date.now();
+
+        if (Math.random() < 0.2) {
+            speak('auto');
+        }
+    }
+
+    function updateStickman() {
+        updateStickmanDisplay();
+    }
+
+    function updateDisplayValues() {
+        tempValue.textContent = temperature.value;
+        bpmValue.textContent = heartrate.value;
+        respValue.textContent = respiration.value;
+        bpValue.textContent = bloodPressure.value;
+        glucoseValue.textContent = glucose.value;
+        hydrationValue.textContent = hydration.value;
+        oxygenValue.textContent = oxygen.value;
+        painValue.textContent = pain.value;
+    }
+
+    function updateStatus() {
+        if (consciousness === 'dead') {
+            stickmanStatus = 'Dead';
+        } else if (consciousness === 'unconscious') {
+            stickmanStatus = 'Unconscious';
+        } else if (consciousness === 'critical') {
+            stickmanStatus = 'Critical';
+        } else if (Date.now() - lastInteractionTime > 15000) {
+            stickmanStatus = 'Bored';
+        } else {
+            stickmanStatus = 'Happy';
+        }
+        statusValue.textContent = stickmanStatus;
+    }
+
+    function updateOrganAppearance() {
+        const temp = parseFloat(temperature.value);
+        const bpm = parseInt(heartrate.value);
+        const resp = parseInt(respiration.value);
+        const bp = parseInt(bloodPressure.value);
+        const gluc = parseInt(glucose.value);
+        const oxy = parseInt(oxygen.value);
+
+        heart.style.fill = oxy < 90 ? 'purple' : 'red';
+        heart.style.opacity = 0.5 + (bpm - 60) / 440;
+
+        const lungOpacity = 0.3 + (resp - 12) / 36;
+        leftLung.style.opacity = lungOpacity;
+        rightLung.style.opacity = lungOpacity;
+        leftLung.style.fill = oxy < 90 ? 'blue' : 'pink';
+        rightLung.style.fill = oxy < 90 ? 'blue' : 'pink';
+
+        bloodVessels.style.strokeWidth = 1 + (bp - 90) / 90;
+
+        const brain = document.getElementById('brain');
+        brain.style.opacity = 0.3 + (gluc - 70) / 260;
+
+        const liver = document.getElementById('liver');
+        liver.style.opacity = 0.3 + (temp - 36) / 14;
+    }
+
+    function updateSymptoms(temp, bpm, resp, bp, gluc, hydr, oxy, painLevel) {
+        let symptoms = [];
+        let feeling = "Normal";
+
+        if (temp > 38) {
+            symptoms.push("Fever");
+            sweat.style.opacity = (temp - 38) / 12; 
+        } else if (temp < 36) {
+            symptoms.push("Hypothermia");
+        }
+
+        if (bpm > 100) {
+            symptoms.push("Tachycardia");
+        } else if (bpm < 60 && bpm > 0) {
+            symptoms.push("Bradycardia");
+        } else if (bpm === 0) {
+            symptoms.push("Cardiac Arrest");
+        }
+
+        if (resp > 20) {
+            symptoms.push("Rapid breathing");
+        } else if (resp < 12) {
+            symptoms.push("Slow breathing");
+        }
+
+        if (bp > 140) {
+            symptoms.push("Hypertension");
+        } else if (bp < 90) {
+            symptoms.push("Hypotension");
+        }
+
+        if (gluc > 140) {
+            symptoms.push("Hyperglycemia");
+        } else if (gluc < 70) {
+            symptoms.push("Hypoglycemia");
+        }
+
+        if (hydr < 50) {
+            symptoms.push("Dehydration");
+        }
+
+        if (oxy < 95) {
+            symptoms.push("Low oxygen");
+        }
+
+        if (painLevel > 0) {
+            symptoms.push(`Pain (level ${painLevel})`);
+        }
+
+        if (symptoms.length === 0) {
+            symptoms.push("None");
+        }
+
+        if (temp > 42 || temp < 28 || bpm > 220 || bpm === 0 || resp > 30 || resp < 4 || bp > 220 || bp < 50 || gluc > 600 || gluc < 20 || hydr < 10 || oxy < 60 || painLevel > 9) {
+            feeling = "Critical";
+        } else if (temp > 39 || temp < 35 || bpm > 120 || bpm < 40 || resp > 25 || bp > 160 || bp < 80 || gluc > 180 || gluc < 60 || hydr < 30 || oxy < 90 || painLevel > 7) {
+            feeling = "Terrible";
+        } else if (temp > 38 || temp < 36 || bpm > 100 || bpm < 50 || resp > 20 || bp > 140 || bp < 90 || gluc > 140 || gluc < 70 || hydr < 50 || oxy < 95 || painLevel > 3) {
+            feeling = "Unwell";
+        }
+
+        symptomList.textContent = symptoms.join(", ");
+        feelingState.textContent = feeling;
+
+        let speech = "";
+        if (feeling === "Critical") {
+            speech = "I'm in critical condition!";
+        } else if (feeling === "Terrible") {
+            speech = "I feel awful! Please help me!";
+        } else if (feeling === "Unwell") {
+            speech = "I'm not feeling great...";
+        } else if (feeling === "Weak") {
+            speech = "I feel a bit weak...";
+        } else {
+            speech = "I'm feeling pretty good!";
+        }
+
+        speechBubble.textContent = speech;
+        speechBubble.style.display = "block";
+        setTimeout(() => { speechBubble.style.display = "none"; }, 3000);
+
+        mouth.style.animation = "talk 0.5s ease-in-out 3";
+    }
+
+    function idleTalk() {
+        if (consciousness === 'awake' && Date.now() - lastInteractionTime > 10000) {
+            speak('auto');
+            lastInteractionTime = Date.now();
+        }
+    }
+
+    function resetAllValues() {
+        temperature.value = 37;
+        heartrate.value = 70;
+        respiration.value = 14;
+        bloodPressure.value = 120;
+        glucose.value = 100;
+        hydration.value = 70;
+        oxygen.value = 98;
+        pain.value = 0;
+        stickmanHealth = 100;
+        deathMessageSpoken = false;
+        updateStickman();
+        addToMedicalHistory("All values reset to normal");
+    }
+
+    function addToMedicalHistory(event) {
+        const historyList = document.getElementById('history-list');
+        const listItem = document.createElement('li');
+        listItem.textContent = `${new Date().toLocaleTimeString()}: ${event}`;
+        historyList.prepend(listItem);
+        if (historyList.children.length > 5) {
+            historyList.removeChild(historyList.lastChild);
+        }
+    }
+
+    function applyTreatment(treatment) {
+        switch(treatment) {
+            case 'water':
+                hydration.value = Math.min(100, parseInt(hydration.value) + 10);
+                addToMedicalHistory("Water given");
+                break;
+            case 'food':
+                glucose.value = Math.min(120, parseInt(glucose.value) + 20);
+                addToMedicalHistory("Food given");
+                break;
+            case 'medicine':
+                pain.value = Math.max(0, parseInt(pain.value) - 2);
+                temperature.value = Math.max(37, parseFloat(temperature.value) - 0.5);
+                addToMedicalHistory("Medicine administered");
+                break;
+            case 'ice':
+                temperature.value = Math.max(35, parseFloat(temperature.value) - 0.5);
+                addToMedicalHistory("Ice pack applied");
+                break;
+            case 'heat':
+                temperature.value = Math.min(39, parseFloat(temperature.value) + 0.5);
+                addToMedicalHistory("Heat pack applied");
+                break;
+        }
+        updateStickman();
+    }
+
+    function addDisease() {
+        const diseases = [
+            { name: 'Flu', effects: { temperature: 1.5, heartrate: 10, respiration: 2 } },
+            { name: 'AIDS', effects: { temperature: 0.5, heartrate: 5, respiration: 1, hydration: -10, oxygen: -3 } },
+            { name: 'HIV', effects: { temperature: 0.3, heartrate: 3, respiration: 1, hydration: -5 } },
+            { name: 'Coronavirus', effects: { temperature: 2, respiration: 4, oxygen: -7 } },
+            { name: 'Rabies', effects: { temperature: 3, heartrate: 20, respiration: 5, hydration: -20 } },
+            { name: 'Pneumonia', effects: { temperature: 2, respiration: 5, oxygen: -5 } },
+            { name: 'Diabetes', effects: { glucose: 50 } },
+            { name: 'Hypertension', effects: { bloodPressure: 30 } },
+            { name: 'Dehydration', effects: { hydration: -30 } },
+            { name: 'Hypothermia', effects: { temperature: -10, heartrate: -20 } },
+            { name: 'Hyperthermia', effects: { temperature: 5, heartrate: 30, hydration: -20 } },
+            { name: 'Sepsis', effects: { temperature: 3, heartrate: 40, respiration: 8, bloodPressure: -30 } },
+            { name: 'Anemia', effects: { heartrate: 20, oxygen: -5 } },
+            { name: 'Asthma Attack', effects: { respiration: 10, oxygen: -10 } }
+        ];
+
+        const diseaseList = diseases.map(disease => `<button class="disease-button" data-disease="${disease.name}">${disease.name}</button>`).join('');
+        
+        const diseaseDialog = document.createElement('div');
+        diseaseDialog.innerHTML = `
+            <div id="disease-dialog" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 1000;">
+                <h2>Select a Disease</h2>
+                ${diseaseList}
+                <button id="close-disease-dialog">Close</button>
+            </div>
+        `;
+        document.body.appendChild(diseaseDialog);
+
+        diseaseDialog.querySelectorAll('.disease-button').forEach(button => {
+            button.addEventListener('click', function() {
+                applyDisease(this.dataset.disease);
+            });
+        });
+
+        document.getElementById('close-disease-dialog').addEventListener('click', function() {
+            document.body.removeChild(this.parentNode.parentNode);
+        });
+    }
+
+    function applyDisease(diseaseName) {
+        const diseases = [
+            { name: 'Flu', effects: { temperature: 1.5, heartrate: 10, respiration: 2 } },
+            { name: 'AIDS', effects: { temperature: 0.5, heartrate: 5, respiration: 1, hydration: -10, oxygen: -3 } },
+            { name: 'HIV', effects: { temperature: 0.3, heartrate: 3, respiration: 1, hydration: -5 } },
+            { name: 'Coronavirus', effects: { temperature: 2, respiration: 4, oxygen: -7 } },
+            { name: 'Rabies', effects: { temperature: 3, heartrate: 20, respiration: 5, hydration: -20 } },
+            { name: 'Pneumonia', effects: { temperature: 2, respiration: 5, oxygen: -5 } },
+            { name: 'Diabetes', effects: { glucose: 50 } },
+            { name: 'Hypertension', effects: { bloodPressure: 30 } },
+            { name: 'Dehydration', effects: { hydration: -30 } },
+            { name: 'Hypothermia', effects: { temperature: -10, heartrate: -20 } },
+            { name: 'Hyperthermia', effects: { temperature: 5, heartrate: 30, hydration: -20 } },
+            { name: 'Sepsis', effects: { temperature: 3, heartrate: 40, respiration: 8, bloodPressure: -30 } },
+            { name: 'Anemia', effects: { heartrate: 20, oxygen: -5 } },
+            { name: 'Asthma Attack', effects: { respiration: 10, oxygen: -10 } }
+        ];
+
+        const disease = diseases.find(d => d.name === diseaseName);
+        
+        if (disease) {
+            Object.keys(disease.effects).forEach(key => {
+                const slider = document.getElementById(key);
+                if (slider) {
+                    slider.value = parseFloat(slider.value) + disease.effects[key];
+                }
+            });
+
+            updateStickman();
+            addToMedicalHistory(`${disease.name} added to stickman`);
+            speak(`Oh no! I think I've caught ${disease.name}!`);
+        }
+
+        const dialog = document.getElementById('disease-dialog');
+        if (dialog) {
+            document.body.removeChild(dialog.parentNode);
+        }
+    }
+
+    function updateDayNightCycle() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const totalMinutes = hours * 60 + minutes;
+        
+        // Calculate the cycle progress (0 to 1)
+        const cycleProgress = (totalMinutes % 1440) / 1440;
+        
+        // Adjust background color based on time
+        const r = Math.round(255 * Math.sin(cycleProgress * Math.PI));
+        const g = Math.round(255 * Math.sin((cycleProgress + 1/3) * Math.PI));
+        const b = Math.round(255 * Math.sin((cycleProgress + 2/3) * Math.PI));
+        
+        document.getElementById('day-night-cycle').style.background = `rgb(${r},${g},${b})`;
+    }
+
+    document.getElementById('add-disease').addEventListener('click', addDisease);
+    document.getElementById('reset-button').addEventListener('click', resetAllValues);
+    document.getElementById('give-water').addEventListener('click', () => applyTreatment('water'));
+    document.getElementById('give-food').addEventListener('click', () => applyTreatment('food'));
+    document.getElementById('give-medicine').addEventListener('click', () => applyTreatment('medicine'));
+    document.getElementById('apply-ice-pack').addEventListener('click', () => applyTreatment('ice'));
+    document.getElementById('apply-heat-pack').addEventListener('click', () => applyTreatment('heat'));
+
+    temperature.addEventListener('input', updateStickmanDisplay);
+    heartrate.addEventListener('input', updateStickmanDisplay);
+    respiration.addEventListener('input', updateStickmanDisplay);
+    bloodPressure.addEventListener('input', updateStickmanDisplay);
+    glucose.addEventListener('input', updateStickmanDisplay);
+    hydration.addEventListener('input', updateStickmanDisplay);
+    oxygen.addEventListener('input', updateStickmanDisplay);
+    pain.addEventListener('input', updateStickmanDisplay);
+
+    setInterval(periodicHealthUpdate, 5000); // Update health every 5 seconds
+    updateStickman(); // Initial update
+    setInterval(idleTalk, 5000);
+    setInterval(updateDayNightCycle, 60000); // Update every minute
+    updateDayNightCycle(); // Initial update
+
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        @keyframes flow {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 100; }
+        }
+        @keyframes talk {
+            0%, 100% { d: path('M90,60 Q100,70 110,60'); }
+            50% { d: path('M90,65 Q100,60 110,65'); }
+        }
+    `;
+    document.head.appendChild(style);
+
+    bloodVessels.style.strokeDasharray = '4 4';
+});
+</script>
+</body>
+</html>
